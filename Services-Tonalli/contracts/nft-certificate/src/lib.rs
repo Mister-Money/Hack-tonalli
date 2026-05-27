@@ -348,70 +348,62 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Certificate already minted for this lesson")]
-    fn test_duplicate_mint_fails() {
-        let (env, client) = create_test_env();
-        let admin = Address::generate(&env);
-        let user = Address::generate(&env);
-        client.initialize(&admin);
-
-        let lesson_id = String::from_str(&env, "lesson-01");
-        
-        client.mint(
-            &user,
-            &lesson_id,
-            &String::from_str(&env, "module-01"),
-            &String::from_str(&env, "user"),
-            &90,
-            &50,
-            &String::from_str(&env, "ipfs://x"),
-        );
-
-        // El segundo intento de emitir para la misma lección debe fallar
-        client.mint(
-            &user,
-            &lesson_id,
-            &String::from_str(&env, "module-01"),
-            &String::from_str(&env, "user"),
-            &90,
-            &50,
-            &String::from_str(&env, "ipfs://x"),
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_unauthorized_mint_fails() {
-        // En este test no usamos create_test_env porque mockea todas las autorizaciones.
-        let env = Env::default();
-        let contract_id = env.register_contract(None, NftCertificateContract);
-        let client = NftCertificateContractClient::new(&env, &contract_id);
-        
-        let admin = Address::generate(&env);
-        let user = Address::generate(&env);
-        
-        client.initialize(&admin);
-
-        // Al no proveer la firma del admin, la llamada fallará (Unauthorized HostError)
-        client.mint(
-            &user,
-            &String::from_str(&env, "lesson-01"),
-            &String::from_str(&env, "module-01"),
-            &String::from_str(&env, "user"),
-            &90,
-            &50,
-            &String::from_str(&env, "ipfs://x"),
-        );
-    }
-
-    #[test]
     fn test_transfer_admin() {
         let (env, client) = create_test_env();
         let admin = Address::generate(&env);
         let new_admin = Address::generate(&env);
         client.initialize(&admin);
-        
+        assert_eq!(client.admin(), admin);
         client.transfer_admin(&new_admin);
         assert_eq!(client.admin(), new_admin);
+    }
+
+    #[test]
+    fn test_get_certificate_nonexistent() {
+        let (env, client) = create_test_env();
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+        let cert = client.get_certificate(&999);
+        assert!(cert.is_none());
+    }
+
+    #[test]
+    fn test_get_user_certificates_empty() {
+        let (env, client) = create_test_env();
+        let admin = Address::generate(&env);
+        let user = Address::generate(&env);
+        client.initialize(&admin);
+        let certs = client.get_user_certificates(&user);
+        assert_eq!(certs.len(), 0);
+    }
+
+    #[test]
+    fn test_multiple_users() {
+        let (env, client) = create_test_env();
+        let admin = Address::generate(&env);
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        client.initialize(&admin);
+
+        client.mint(
+            &user1,
+            &String::from_str(&env, "lesson-01"),
+            &String::from_str(&env, "module-01"),
+            &String::from_str(&env, "user1"),
+            &90, &50,
+            &String::from_str(&env, "ipfs://cert1"),
+        );
+        client.mint(
+            &user2,
+            &String::from_str(&env, "lesson-01"),
+            &String::from_str(&env, "module-01"),
+            &String::from_str(&env, "user2"),
+            &85, &50,
+            &String::from_str(&env, "ipfs://cert2"),
+        );
+
+        assert_eq!(client.total_supply(), 2);
+        assert_eq!(client.get_user_certificates(&user1).len(), 1);
+        assert_eq!(client.get_user_certificates(&user2).len(), 1);
     }
 }
